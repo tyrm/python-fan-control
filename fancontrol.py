@@ -8,7 +8,7 @@ debug = True
 fan_min = 20
 fan_max = 100
 
-temp_lower = 40
+temp_lower = 35
 temp_max = 55
 
 fan_pin = 32
@@ -110,13 +110,13 @@ def main():
     fan_pwm = GPIO.PWM(fan_pin, 100)
     fan_pwm.start(0)
 
-    if hat_present():
-        print("Found Control Hat")
 
     # Start Loops
     loop = asyncio.get_event_loop()
     asyncio.ensure_future(start_webserver())
-    asyncio.ensure_future(start_fan_control(fan_pwm))
+    if hat_present():
+        print("Found Control Hat")
+        asyncio.ensure_future(start_fan_control(fan_pwm))
     loop.run_forever()
 
 
