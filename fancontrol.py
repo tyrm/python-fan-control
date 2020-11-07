@@ -99,6 +99,8 @@ async def start_fan_control(fan_pwm):
             try:
                 buddy_temp = get_remote_temp(buddy_name)
             except:
+                if DEBUG:
+                    print("could not get buddy temp")
                 pass
 
         # Get my temp

@@ -1,2 +1,3 @@
 aiohttp
+requests
 RPi.GPIO
