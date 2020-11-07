@@ -1,7 +1,6 @@
 import asyncio
 import aiohttp.web
 import RPi.GPIO as GPIO
-from time import sleep
 
 debug = True
 
@@ -19,6 +18,7 @@ presense_pin = 36
 
 # Web Globals
 app = aiohttp.web.Application()
+
 
 def get_temp():
     """Get the core temperature.
@@ -47,6 +47,26 @@ def renormalize(n, range1, range2):
     return (delta2 * (n - range1[0]) / delta1) + range2[0]
 
 
+async def http_hat(request):
+    data = {
+        'hat': hat_present()
+    }
+    return aiohttp.web.json_response(data)
+
+
+app.router.add_get('/hat', http_hat)
+
+
+async def http_temp(request):
+    data = {
+        'temp': get_temp()
+    }
+    return aiohttp.web.json_response(data)
+
+
+app.router.add_get('/temp', http_temp)
+
+
 async def start_fan_control(fan_pwm):
     while True:
         temp = get_temp()
@@ -73,7 +93,7 @@ async def start_webserver():
     listen = '0.0.0.0'
     port = 8080
 
-    print('Starting webserver at {listen}:{port}'.format(listen=listen,port=port))
+    print('Starting webserver at {listen}:{port}'.format(listen=listen, port=port))
 
     site = aiohttp.web.TCPSite(runner, listen, port)
     await site.start()
@@ -81,14 +101,14 @@ async def start_webserver():
 
 def main():
     # Setup Hardware
-    GPIO.setwarnings(False)			#disable warnings
-    GPIO.setmode(GPIO.BOARD)		#set pin numbering system
+    GPIO.setwarnings(False)
+    GPIO.setmode(GPIO.BOARD)
 
-    GPIO.setup(fan_pin,GPIO.OUT)
+    GPIO.setup(fan_pin, GPIO.OUT)
     GPIO.setup(presense_pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
-    fan_pwm = GPIO.PWM(fan_pin,100)		#create PWM instance with frequency
-    fan_pwm.start(0)				#start PWM of required Duty Cycle 
+    fan_pwm = GPIO.PWM(fan_pin, 100)
+    fan_pwm.start(0)
 
     if hat_present():
         print("Found Control Hat")
