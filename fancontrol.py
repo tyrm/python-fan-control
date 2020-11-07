@@ -12,7 +12,10 @@ fan_max = 100
 temp_lower = 40
 temp_max = 55
 
-fanpin = 32
+fan_pin = 32
+
+# Hat Globals
+presense_pin = 36
 
 # Web Globals
 app = aiohttp.web.Application()
@@ -31,11 +34,17 @@ def get_temp():
     except (IndexError, ValueError,) as e:
         raise RuntimeError('Could not parse temperature output.') from e
 
+
+def hat_present():
+    if GPIO.input(presense_pin) == 1:
+        return True
+    return False
+
+
 def renormalize(n, range1, range2):
     delta1 = range1[1] - range1[0]
     delta2 = range2[1] - range2[0]
     return (delta2 * (n - range1[0]) / delta1) + range2[0]
-
 
 
 async def start_fan_control(fan_pwm):
@@ -57,6 +66,7 @@ async def start_fan_control(fan_pwm):
 
         await asyncio.sleep(15)
 
+
 async def start_webserver():
     runner = aiohttp.web.AppRunner(app)
     await runner.setup()
@@ -73,12 +83,15 @@ def main():
     # Setup Hardware
     GPIO.setwarnings(False)			#disable warnings
     GPIO.setmode(GPIO.BOARD)		#set pin numbering system
-    GPIO.setup(fanpin,GPIO.OUT)
 
-    fan_pwm = GPIO.PWM(fanpin,100)		#create PWM instance with frequency
+    GPIO.setup(fan_pin,GPIO.OUT)
+    GPIO.setup(presense_pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+
+    fan_pwm = GPIO.PWM(fan_pin,100)		#create PWM instance with frequency
     fan_pwm.start(0)				#start PWM of required Duty Cycle 
 
-    fan_pwm.ChangeDutyCycle(50)
+    if hat_present():
+        print("Found Control Hat")
 
     # Start Loops
     loop = asyncio.get_event_loop()
