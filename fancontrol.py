@@ -3,11 +3,12 @@
 
 import asyncio
 import aiohttp.web
+import os
+import requests
 import RPi.GPIO as GPIO
 
 DEBUG = True
 
-# Fan Globals
 FAN_MIN = 20
 FAN_MAX = 100
 
@@ -15,9 +16,19 @@ TEMP_LOW = 35
 TEMP_HIGH = 55
 
 FAN_PIN = 32
-
-# Hat Globals
 PRESENSE_PIN = 36
+
+
+def get_remote_temp(name):
+    """Get the core temperature from remote fan agent.
+    Parameters:
+        name (str): hostname of the remote 
+    Returns:
+        int: The core temperature in thousanths of degrees Celsius.
+    """
+    data = requests.get(url="http://{}:9768/temp".format(name)).json()
+    return data["temp"]
+
 
 
 def get_temp():
@@ -78,8 +89,26 @@ async def http_temp(request):
 
 
 async def start_fan_control(fan_pwm):
+    # get buddy config
+    buddy_name = os.environ.get('BUDDY')
+
     while True:
+        # Get Buddy's Temp
+        buddy_temp = 0
+        if buddy_name is not None:
+            try:
+                buddy_temp = get_remote_temp(buddy_name)
+            except:
+                pass
+
+        # Get my temp
+        using_temp = "M"
         temp = get_temp()
+
+        # Use Higher Value
+        if buddy_temp > temp:
+            using_temp = "B"
+            temp = buddy_temp
 
         cycles = 0
 
@@ -92,7 +121,7 @@ async def start_fan_control(fan_pwm):
 
         fan_pwm.ChangeDutyCycle(cycles)
         if DEBUG:
-            print("{}C {}".format(temp, cycles))
+            print("{} {}C {}".format(using_temp, temp, cycles))
 
         await asyncio.sleep(15)
 
@@ -101,7 +130,7 @@ async def start_webserver(app):
     runner = aiohttp.web.AppRunner(app)
     await runner.setup()
     listen = '0.0.0.0'
-    port = 8080
+    port = 9768
 
     print('Starting webserver at {listen}:{port}'.format(listen=listen, port=port))
 
@@ -124,7 +153,6 @@ def main():
     app = aiohttp.web.Application()
     app.router.add_get('/hat', http_hat)
     app.router.add_get('/temp', http_temp)
-
 
     # Start Loops
     loop = asyncio.get_event_loop()
