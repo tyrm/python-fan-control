@@ -5,6 +5,7 @@ import asyncio
 import aiohttp.web
 import os
 import requests
+import time
 import RPi.GPIO as GPIO
 
 DEBUG = True
@@ -15,14 +16,16 @@ FAN_MAX = 100
 TEMP_LOW = 35
 TEMP_HIGH = 55
 
-FAN_PIN = 32
-PRESENSE_PIN = 36
+PRESENSE_PIN = 16
 
+clock_pin = 6
+data_pin  = 5
+latch_pin = 12
 
 def get_remote_temp(name):
     """Get the core temperature from remote fan agent.
     Parameters:
-        name (str): hostname of the remote 
+        name (str): hostname of the remote
     Returns:
         int: The core temperature in thousanths of degrees Celsius.
     """
@@ -65,12 +68,30 @@ def renormalize(val, range1, range2):
         range1 (float[2]): initial value range
         range2 (float[2]): new range to scale value to
     Returns:
-        float: 
+        float:
     """
     delta1 = range1[1] - range1[0]
     delta2 = range2[1] - range2[0]
     return (delta2 * (val - range1[0]) / delta1) + range2[0]
 
+def shift_out(level):
+    for x in range(0, 8):
+        the_bit = (level >> 7-x) & 1
+
+        if the_bit:
+            GPIO.output(data_pin, GPIO.HIGH)
+        else:
+            GPIO.output(data_pin, GPIO.LOW)
+
+        GPIO.output(clock_pin, GPIO.HIGH)
+        time.sleep(.001)
+        GPIO.output(clock_pin, GPIO.LOW)
+        time.sleep(.001)
+
+    GPIO.output(latch_pin, GPIO.LOW)
+    time.sleep(.001)
+    GPIO.output(latch_pin, GPIO.HIGH)
+    time.sleep(.001)
 
 async def http_hat(request):
     #pylint: disable=unused-argument
@@ -88,7 +109,7 @@ async def http_temp(request):
     return aiohttp.web.json_response(data)
 
 
-async def start_fan_control(fan_pwm):
+async def start_fan_control():
     # get buddy config
     buddy_name = os.environ.get('BUDDY')
 
@@ -121,7 +142,7 @@ async def start_fan_control(fan_pwm):
         else:
             cycles = int(renormalize(temp, [TEMP_LOW, TEMP_HIGH], [FAN_MIN, FAN_MAX]))
 
-        fan_pwm.ChangeDutyCycle(cycles)
+        shift_out(cycles)
         if DEBUG:
             print("{} {}C {}".format(using_temp, temp, cycles))
 
@@ -143,13 +164,18 @@ async def start_webserver(app):
 def main():
     # Setup Hardware
     GPIO.setwarnings(False)
-    GPIO.setmode(GPIO.BOARD)
+    GPIO.setmode(GPIO.BCM)
 
-    GPIO.setup(FAN_PIN, GPIO.OUT)
     GPIO.setup(PRESENSE_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
-    fan_pwm = GPIO.PWM(FAN_PIN, 100)
-    fan_pwm.start(0)
+    GPIO.setup(clock_pin, GPIO.OUT)
+    GPIO.setup(data_pin, GPIO.OUT)
+    GPIO.setup(latch_pin, GPIO.OUT)
+
+    GPIO.output(clock_pin, GPIO.LOW)
+    GPIO.output(data_pin, GPIO.LOW)
+    GPIO.output(latch_pin, GPIO.HIGH)
+
 
     # Web
     app = aiohttp.web.Application()
@@ -161,7 +187,7 @@ def main():
     asyncio.ensure_future(start_webserver(app))
     if hat_present():
         print("Found Control Hat")
-        asyncio.ensure_future(start_fan_control(fan_pwm))
+        asyncio.ensure_future(start_fan_control())
     loop.run_forever()
 
 
