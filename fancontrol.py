@@ -11,7 +11,7 @@ import RPi.GPIO as GPIO
 DEBUG = True
 
 FAN_MIN = 20
-FAN_MAX = 100
+FAN_MAX = 255
 
 TEMP_LOW = 35
 TEMP_HIGH = 55
